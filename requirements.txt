@@ -1,5 +1,5 @@
-streamlit
-numpy
+Flask
 tensorflow
-pillow
-opencv-python-headless
+numpy
+opencv-python
+Pillow
