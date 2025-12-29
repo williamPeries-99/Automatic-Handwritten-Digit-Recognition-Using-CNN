@@ -1,27 +1,44 @@
+import streamlit as st
 import numpy as np
 import tensorflow as tf
-from flask import Flask, render_template, request, jsonify
-import base64
-from io import BytesIO
 from PIL import Image
 import cv2
 import re
 
-app = Flask(__name__)
+# -------------------------------------------------
+# Page config
+# -------------------------------------------------
+st.set_page_config(
+    page_title="Handwritten Digit & Symbol Calculator",
+    layout="centered"
+)
 
+st.title("✍️ Handwritten Digit & Symbol Recognition")
+st.caption("CNN-based multi-symbol handwritten calculator")
+
+# -------------------------------------------------
 # Load trained model
-model = tf.keras.models.load_model("handwritten_model.h5")
+# -------------------------------------------------
+@st.cache_resource
+def load_model():
+    return tf.keras.models.load_model("handwritten_model.h5")
 
-CLASS_NAMES = ['+', '-', '0', '1', '2', '3', '4', '5',
-               '6', '7', '8', '9', '[', ']', 'd', 't']
+model = load_model()
 
+# Class labels (same order used during training)
+CLASS_NAMES = [
+    '+', '-', '0', '1', '2', '3', '4', '5',
+    '6', '7', '8', '9', '[', ']', 'd', 't'
+]
 
-def recognize_symbols(image_base64):
-    image_bytes = base64.b64decode(image_base64)
-    image = Image.open(BytesIO(image_bytes)).convert("L")
+# -------------------------------------------------
+# Symbol recognition function
+# -------------------------------------------------
+def recognize_symbols(image):
+    image = image.convert("L")
     img = np.array(image)
 
-    # Threshold
+    # Binary threshold
     _, img = cv2.threshold(img, 170, 255, cv2.THRESH_BINARY)
 
     # Find contours
@@ -32,7 +49,7 @@ def recognize_symbols(image_base64):
     if not contours:
         return "", 0.0
 
-    # Sort left → right
+    # Sort contours left to right
     contours = sorted(contours, key=lambda c: cv2.boundingRect(c)[0])
 
     symbols = []
@@ -54,8 +71,7 @@ def recognize_symbols(image_base64):
         resized = cv2.resize(cropped, (22, 22), interpolation=cv2.INTER_AREA)
 
         canvas = np.ones((28, 28), dtype=np.uint8) * 255
-        offset = 3
-        canvas[offset:offset + 22, offset:offset + 22] = resized
+        canvas[3:25, 3:25] = resized
 
         canvas = canvas.astype("float32") / 255.0
         canvas = canvas.reshape(1, 28, 28, 1)
@@ -71,43 +87,36 @@ def recognize_symbols(image_base64):
 
     return "".join(symbols), sum(confidences) / len(confidences)
 
+# -------------------------------------------------
+# UI
+# -------------------------------------------------
+uploaded_file = st.file_uploader(
+    "Upload a handwritten expression image",
+    type=["png", "jpg", "jpeg"]
+)
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+if uploaded_file:
+    image = Image.open(uploaded_file)
+    st.image(image, caption="Uploaded Image", use_container_width=True)
 
+    prediction, confidence = recognize_symbols(image)
 
-@app.route("/predict", methods=["POST"])
-def predict():
-    data = request.get_json()
-    prediction, confidence = recognize_symbols(data["image"])
-    return jsonify({
-        "prediction": prediction,
-        "confidence": round(confidence, 3)
-    })
+    if prediction:
+        # Convert symbols to operators
+        expression = prediction.replace("t", "*").replace("d", "/")
 
+        st.subheader("🧠 Prediction")
+        st.write(f"**Recognized Expression:** `{expression}`")
+        st.write(f"**Average Confidence:** `{confidence:.2f}`")
 
-@app.route("/calculate", methods=["POST"])
-def calculate():
-    data = request.get_json()
-    expression, _ = recognize_symbols(data["image"])
-
-    # Convert symbols to math operators
-    expression = expression.replace("d", "/").replace("t", "*")
-
-    # Safety check
-    if not re.fullmatch(r"[0-9+\-*/().]+", expression):
-        return jsonify({"error": "Invalid expression"})
-
-    try:
-        result = eval(expression)
-        return jsonify({
-            "expression": expression,
-            "result": result
-        })
-    except:
-        return jsonify({"error": "Calculation failed"})
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
+        # Safety check
+        if re.fullmatch(r"[0-9+\-*/().]+", expression):
+            try:
+                result = eval(expression)
+                st.success(f"✅ Calculated Result: **{result}**")
+            except:
+                st.error("❌ Calculation failed")
+        else:
+            st.error("❌ Invalid mathematical expression")
+    else:
+        st.warning("No symbols detected")
