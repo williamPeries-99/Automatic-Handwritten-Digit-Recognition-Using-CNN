@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Handwritten Calculator</title>
+
+<style>
+/* ===== Global ===== */
+body {
+    text-align: center;
+    font-family: "Segoe UI", Roboto, Arial, sans-serif;
+    background: linear-gradient(135deg, #e3f2fd, #f9f9f9);
+    margin: 0;
+    padding: 20px;
+    color: #222;
+}
+
+/* ===== Headings ===== */
+h1 {
+    font-size: 2.2rem;
+    margin-bottom: 8px;
+    color: #0d47a1;
+}
+
+p {
+    color: #555;
+    margin-top: 0;
+    font-size: 0.95rem;
+}
+
+/* ===== Canvas ===== */
+canvas {
+    border: 4px dashed #90caf9;
+    background-color: white;
+    margin: 24px auto;
+    display: block;
+    border-radius: 16px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+canvas:hover {
+    transform: scale(1.01);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
+}
+
+/* ===== Buttons ===== */
+button {
+    padding: 12px 22px;
+    margin: 6px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+    background: linear-gradient(135deg, #2196f3, #1976d2);
+    color: white;
+    box-shadow: 0 6px 14px rgba(33, 150, 243, 0.35);
+    transition: all 0.25s ease;
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px rgba(33, 150, 243, 0.55);
+}
+
+button:active {
+    transform: scale(0.96);
+}
+/* ===== Active Tool Button Styling ===== */
+
+/* Default tool button */
+.controls button {
+    background: linear-gradient(135deg, #2196f3, #1976d2);
+    box-shadow: 0 6px 14px rgba(33, 150, 243, 0.35);
+}
+
+/* When a tool button is clicked / focused */
+/* ===== Active Tool Button Styling ===== */
+.controls button:focus,
+.controls button:focus-visible {
+    outline: none;
+    background: linear-gradient(135deg, #ff9800, #f57c00);
+    box-shadow: 0 8px 18px rgba(255, 152, 0, 0.6);
+    transform: scale(1.05);
+}
+
+
+/* Slight press animation */
+.controls button:active {
+    transform: scale(0.96);
+}
+
+
+/* ===== Control Groups ===== */
+.controls {
+    margin: 14px auto;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(8px);
+    border-radius: 14px;
+    display: inline-block;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Pen size text */
+.controls span {
+    font-size: 14px;
+    margin: 0 8px;
+    color: #333;
+}
+
+/* ===== Popup ===== */
+.popup {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    background: linear-gradient(135deg, #ffffff, #f3f7fb);
+    padding: 32px;
+    border-radius: 20px;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
+    min-width: 280px;
+    animation: popupIn 0.3s ease forwards;
+}
+
+@keyframes popupIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -55%) scale(0.85);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+.popup h2 {
+    margin: 0 0 20px 0;
+    font-size: 1.6rem;
+    color: #0d47a1;
+}
+
+/* ===== Popup Button ===== */
+.popup button {
+    background: linear-gradient(135deg, #4caf50, #2e7d32);
+    box-shadow: 0 6px 14px rgba(76, 175, 80, 0.4);
+}
+
+.popup button:hover {
+    box-shadow: 0 10px 22px rgba(76, 175, 80, 0.6);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 640px) {
+    canvas {
+        width: 95% !important;
+        height: auto !important;
+    }
+
+    h1 {
+        font-size: 1.8rem;
+    }
+
+    button {
+        font-size: 14px;
+        padding: 10px 18px;
+    }
+}
+
+</style>
+</head>
+
+<body>
+
+<h1>Handwritten Calculator</h1>
+<p>Draw: 1+1, 12+3, 7t6, 8d2</p>
+
+<canvas id="canvas" width="560" height="280"></canvas>
+
+<!-- ✏️ Drawing Controls -->
+<div class="controls">
+    <button onclick="setPen()">Pen</button>
+    <button onclick="setEraser()">Eraser</button>
+    <button onclick="decreasePen()">−</button>
+    <span>Pen Size: <b id="penSizeText">18</b></span>
+    <button onclick="increasePen()">+</button>
+</div>
+
+<!-- 🔘 Action Buttons -->
+<div class="controls">
+    <button onclick="clearCanvas()">Clear</button>
+    <button onclick="predictDigit()">Predict</button>
+    <button onclick="calculate()">Calculate</button>
+</div>
+
+<!-- 📦 Popup -->
+<div id="popup" class="popup">
+    <h2 id="popup-text"></h2>
+    <button onclick="closePopup()">Close</button>
+</div>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+let isDrawing = false;
+
+let penSize = 18;
+let isEraser = false;
+
+// Canvas setup
+ctx.fillStyle = "white";
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+ctx.lineCap = "round";
+ctx.strokeStyle = "black";
+ctx.lineWidth = penSize;
+
+document.getElementById("penSizeText").innerText = penSize;
+
+// Scale-correct mouse/touch position
+function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+        x: ((e.clientX || e.touches[0].clientX) - rect.left) * scaleX,
+        y: ((e.clientY || e.touches[0].clientY) - rect.top) * scaleY
+    };
+}
+
+function startDrawing(e) {
+    isDrawing = true;
+    const p = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+}
+
+function draw(e) {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const p = getPos(e);
+
+    ctx.strokeStyle = isEraser ? "white" : "black";
+    ctx.lineWidth = penSize;
+
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+}
+
+function stopDrawing() {
+    isDrawing = false;
+    ctx.beginPath();
+}
+
+// ✏️ Pen / Eraser
+function setPen() {
+    isEraser = false;
+}
+
+function setEraser() {
+    isEraser = true;
+}
+
+// ➕➖ Pen size
+function increasePen() {
+    penSize = Math.min(40, penSize + 2);
+    updatePenText();
+}
+
+function decreasePen() {
+    penSize = Math.max(4, penSize - 2);
+    updatePenText();
+}
+
+function updatePenText() {
+    document.getElementById("penSizeText").innerText = penSize;
+}
+
+// 🧼 Clear canvas
+function clearCanvas() {
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.beginPath();
+}
+
+// 🔮 Predict
+function predictDigit() {
+    sendImage("/predict");
+}
+
+// 🧮 Calculate
+function calculate() {
+    sendImage("/calculate");
+}
+
+function sendImage(url) {
+    const base64 = canvas.toDataURL("image/png").split(",")[1];
+
+    fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64 })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.result !== undefined) {
+            showPopup(data.expression + " = " + data.result);
+        }
+        else if (data.prediction !== undefined) {
+            let display = data.prediction
+                .replace(/t/g, "*")
+                .replace(/d/g, "/");
+            showPopup("Prediction: " + display);
+        }
+        else {
+            showPopup(data.error || "Error");
+        }
+    });
+}
+
+// 📦 Popup
+function showPopup(text) {
+    document.getElementById("popup-text").innerText = text;
+    document.getElementById("popup").style.display = "block";
+}
+
+function closePopup() {
+    document.getElementById("popup").style.display = "none";
+}
+
+// Mouse events
+canvas.addEventListener("mousedown", startDrawing);
+canvas.addEventListener("mousemove", draw);
+canvas.addEventListener("mouseup", stopDrawing);
+canvas.addEventListener("mouseout", stopDrawing);
+
+// Touch events
+canvas.addEventListener("touchstart", startDrawing);
+canvas.addEventListener("touchmove", draw);
+canvas.addEventListener("touchend", stopDrawing);
+document.querySelector(".controls button").focus();
+
+</script>
+
+</body>
+</html>
